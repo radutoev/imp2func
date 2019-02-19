@@ -1,0 +1,1 @@
+Playground for converting some imperative code to a more functional style
