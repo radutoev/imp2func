@@ -1,5 +1,5 @@
 import scala.io.StdIn
-import scala.util.Random
+import scala.util.{Random, Try}
 
 object ImpCoinFlip extends App {
   def main(): Unit = {
@@ -17,14 +17,18 @@ object ImpCoinFlip extends App {
       val num = Random.nextInt(5) + 1
       println(s"$name, please guess a number between 1 and 5:")
 
-      val guess = StdIn.readLine().toInt
+      val maybeGuess: Option[Int] = Try { StdIn.readLine().toInt } toOption
 
-      if(guess == num) {
-        correctGuesses += 1
-        println("You guessed right")
+      if(maybeGuess.isDefined) {
+        if(maybeGuess.get == num) {
+          correctGuesses += 1
+          println("You guessed right")
+        } else {
+          totalGuesses += 1
+          println(s"You guessed wrong, the number was $num")
+        }
       } else {
-        totalGuesses += 1
-        println(s"You guessed wrong, the number was $num")
+        println("You entered an invalid number")
       }
 
       println("Do you want to continue?")
