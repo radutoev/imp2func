@@ -1,3 +1,5 @@
+import FuncGuessing.gameLoop
+
 import scala.io.StdIn
 import scala.util.{Random, Try}
 
@@ -96,7 +98,6 @@ object FuncGuessing {
   def nextInt(upper: Int): IO[Int] = IO(() => Random.nextInt(upper))
 
   //11. recursive helper function
-
   def checkContinue(name: String): IO[Boolean] =
     for {
       _     <- putStrLn("Do you want to continue?")
@@ -109,49 +110,78 @@ object FuncGuessing {
     } yield cont
 
 //  def gameLoop(): IO[Unit] = ??? //use ??? because we don;t implement it yet
-  def gameLoop(name :String): IO[Unit] = {
-    //but we want to use for comprehension to take advantage of all its glory :)
-    for {
-      //in style of pure fp, we can't allow effects, therefore:
-      num   <- nextInt(5).map(_ + 1) //can no longer add 1 to the IO of Int
-      _     <- putStrLn(s"$name, please guess a number between 1 and 5:")
-      input <- getStrLn
-      //folding over the Option
-      _     <- parseInt(input).fold(
-                  putStrLn("You did not enter a number")
-               )(guess =>
-                 if(guess == num) putStrLn("You guessed right")
-                 else putStrLn(s"You guessed wrong, the number was $num")
-               )
-      cont  <- checkContinue(name)
-      _     <- if(cont) gameLoop(name) else IO.point(())
-    } yield ()
-    //not tail recursive because for comprehension applies a final map, so you will run out of heap.
+//  def gameLoop(name :String): IO[Unit] = {
+//    //but we want to use for comprehension to take advantage of all its glory :)
+//    for {
+//      //in style of pure fp, we can't allow effects, therefore:
+//      num   <- nextInt(5).map(_ + 1) //can no longer add 1 to the IO of Int
+//      _     <- putStrLn(s"$name, please guess a number between 1 and 5:")
+//      input <- getStrLn
+//      //folding over the Option
+//      _     <- parseInt(input).fold(
+//                  putStrLn("You did not enter a number")
+//               )(guess =>
+//                 if(guess == num) putStrLn("You guessed right")
+//                 else putStrLn(s"You guessed wrong, the number was $num")
+//               )
+//      cont  <- checkContinue(name)
+//      _     <- if(cont) gameLoop(name) else IO.point(())
+//    } yield ()
+//    //not tail recursive because for comprehension applies a final map, so you will run out of heap.
 
-//    var correctGuesses: Int = 0
-//    var totalGuesses: Int = 0
+    //13. Let's deal with state. Main idea, don't mutate, but use a technique of copy on update.
+    case class GameState(correctGuesses: Int = 0, totalGuesses: Int = 0) { self =>
+      def guessedCorrectly(): GameState = self.copy(correctGuesses = self.correctGuesses + 1, totalGuesses = self.totalGuesses + 1)
+    }
+
+    //with state
+    def gameLoop(name :String, gameState: GameState): IO[Unit] = {
+      for {
+        num       <- nextInt(5).map(_ + 1)
+        _         <- putStrLn(s"$name, please guess a number between 1 and 5:")
+        input     <- getStrLn
+        //folding over the Option
+        newState  <- parseInt(input).fold(
+                       putStrLn("You did not enter a number").map(_ => gameState)
+                     )(guess =>
+                       if(guess == num) putStrLn("You guessed right").map(_ => gameState.guessedCorrectly())
+                       else putStrLn(s"You guessed wrong, the number was $num").map(_ => gameState.copy(totalGuesses = gameState.totalGuesses + 1))
+                     )
+        cont      <- checkContinue(name)
+        _         <- if(cont) gameLoop(name, newState)
+                     else putStrLn(s"Thanks for playing. You had ${newState.correctGuesses} correct guesses out of a total of ${newState.totalGuesses} tries").map(_ => IO.point(()))
+      } yield ()
   }
 
-
   def main(): IO[Unit] = {
-    //8. this does not do anything, it just returns an IO of Unit
-    //we're just going to wait until the beginning of the universe for it to be executed.
-    //this allows us to program in a pure functional style except at the top level
-    //at the top level we call all the effects, so the spread of effects is limited
-    //    putStrLn("What is your name?")
-
-    //9. so in order to have it do something we need to flatMap it (????)
-    //so we need to have 2 methods on the IO case class, map and flatMap
-    //having that in place allows us to use the functions in a for comprehension.
     for {
       _    <- putStrLn("What is your name?") // _ denotes that we don't want to use the return type of the function.
       name <- getStrLn
       _    <- putStrLn(s"Hello, $name, welcome to the guessing game.")
-      //10. at the exec we hit a loop, loops can be translated into fp using recursion.
-      //in order to do that let's create a helper function
-      _ <- gameLoop(name)
+      _ <- gameLoop(name, new GameState)
     } yield () //yield unit.
   }
+
+
+//  def main(): IO[Unit] = {
+//    //8. this does not do anything, it just returns an IO of Unit
+//    //we're just going to wait until the beginning of the universe for it to be executed.
+//    //this allows us to program in a pure functional style except at the top level
+//    //at the top level we call all the effects, so the spread of effects is limited
+//    //    putStrLn("What is your name?")
+//
+//    //9. so in order to have it do something we need to flatMap it (????)
+//    //so we need to have 2 methods on the IO case class, map and flatMap
+//    //having that in place allows us to use the functions in a for comprehension.
+//    for {
+//      _    <- putStrLn("What is your name?") // _ denotes that we don't want to use the return type of the function.
+//      name <- getStrLn
+//      _    <- putStrLn(s"Hello, $name, welcome to the guessing game.")
+//      //10. at the exec we hit a loop, loops can be translated into fp using recursion.
+//      //in order to do that let's create a helper function
+//      _ <- gameLoop(name)
+//    } yield () //yield unit.
+//  }
 //    val name = StdIn.readLine()
 //
 //    println(s"Hello, $name, welcome to the guessing game.")
